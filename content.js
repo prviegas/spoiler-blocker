@@ -4,6 +4,54 @@ console.log("Spoiler Blocker extension loaded");
 let foundCommentsSection = null;
 let foundCommentsSelector = null;
 let isProcessingHideComments = false;
+let currentChannelId = null;
+let commentsHidden = false;
+let settings = {
+  spoilerChannels: [],
+  onlySpoilerChannels: true
+};
+
+function loadSettings() {
+  chrome.storage.sync.get({
+    spoilerChannels: [],
+    onlySpoilerChannels: true
+  }, function(items) {
+    settings = items;
+    
+    if (location.href.includes('youtube.com/watch')) {
+      detectChannelAndProcessComments();
+    }
+  });
+}
+
+function detectChannelAndProcessComments() {
+  currentChannelId = extractChannelIdFromPage();
+  
+  if (!currentChannelId) {
+    setTimeout(detectChannelAndProcessComments, 500);
+    return;
+  }
+  
+  const isSpoilerChannel = settings.spoilerChannels.some(ch => ch.id === currentChannelId);
+  
+  if (!settings.onlySpoilerChannels || (settings.onlySpoilerChannels && isSpoilerChannel)) {
+    hideComments();
+  }
+}
+
+function extractChannelIdFromPage() {
+  let channelId = null;
+  
+  const ownerElement = document.querySelector('#owner #channel-name a');
+  if (ownerElement && ownerElement.href) {
+    const match = ownerElement.href.match(/youtube\.com\/(channel|c|user|@)(\/|%2F)?([\w-]+)/i);
+    if (match && match[3]) {
+      channelId = match[3];
+    }
+  }
+  
+  return channelId;
+}
 
 function hideComments() {
   if (isProcessingHideComments) return false;
@@ -29,6 +77,7 @@ function hideComments() {
       foundCommentsSection = commentsSection;
       foundCommentsSelector = selector;
       commentsSection.style.display = 'none';
+      commentsHidden = true;
       createShowCommentsButton(commentsSection);
       isProcessingHideComments = false;
       return true;
@@ -37,6 +86,46 @@ function hideComments() {
   
   isProcessingHideComments = false;
   return false;
+}
+
+function showComments() {
+  if (foundCommentsSection) {
+    foundCommentsSection.style.display = 'block';
+    commentsHidden = false;
+    
+    const buttonContainer = document.getElementById('spoiler-blocker-button-container');
+    if (buttonContainer && buttonContainer.parentNode) {
+      buttonContainer.parentNode.removeChild(buttonContainer);
+    }
+    
+    showNotification('Comments are now visible');
+    return true;
+  } else if (foundCommentsSelector) {
+    const commentsSection = document.querySelector(foundCommentsSelector);
+    if (commentsSection) {
+      commentsSection.style.display = 'block';
+      commentsHidden = false;
+      
+      const buttonContainer = document.getElementById('spoiler-blocker-button-container');
+      if (buttonContainer && buttonContainer.parentNode) {
+        buttonContainer.parentNode.removeChild(buttonContainer);
+      }
+      
+      showNotification('Comments are now visible');
+      return true;
+    }
+  }
+  
+  showNotification('Error: Could not find comments to show');
+  return false;
+}
+
+function toggleComments() {
+  if (commentsHidden) {
+    return showComments();
+  } else {
+    return hideComments();
+  }
 }
 
 function createShowCommentsButton(commentsSection) {
@@ -75,34 +164,7 @@ function createShowCommentsButton(commentsSection) {
   });
   
   showCommentsButton.addEventListener('click', () => {
-    console.log('Show comments button clicked');
-    
-    if (foundCommentsSection) {
-      foundCommentsSection.style.display = 'block';
-      
-      if (buttonContainer.parentNode) {
-        buttonContainer.parentNode.removeChild(buttonContainer);
-      }
-      
-      console.log('Comments shown by user action');
-      showNotification('Comments are now visible');
-    } else {
-      console.error('Unable to find comments section to show');
-      
-      if (foundCommentsSelector) {
-        const commentsSection = document.querySelector(foundCommentsSelector);
-        if (commentsSection) {
-          commentsSection.style.display = 'block';
-          if (buttonContainer.parentNode) {
-            buttonContainer.parentNode.removeChild(buttonContainer);
-          }
-          console.log('Comments found and shown by selector');
-          showNotification('Comments are now visible');
-        } else {
-          showNotification('Error: Could not find comments to show');
-        }
-      }
-    }
+    showComments();
   });
   
   buttonContainer.appendChild(showCommentsButton);
@@ -117,16 +179,35 @@ function createShowCommentsButton(commentsSection) {
   commentsSection.parentNode.insertBefore(buttonContainer, commentsSection);
 }
 
-if (!hideComments()) {
-  const initialHideAttempt = setInterval(() => {
-    if (hideComments()) {
-      clearInterval(initialHideAttempt);
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'getStatus') {
+    sendResponse({
+      channelId: currentChannelId,
+      commentsHidden: commentsHidden
+    });
+  } else if (request.action === 'toggleComments') {
+    toggleComments();
+    sendResponse({ success: true });
+  }
+  return true;
+});
+
+function initializePage() {
+  loadSettings();
+
+  if (location.href.includes('youtube.com/watch')) {
+    if (!detectChannelAndProcessComments()) {
+      const initialHideAttempt = setInterval(() => {
+        if (detectChannelAndProcessComments()) {
+          clearInterval(initialHideAttempt);
+        }
+      }, 1000);
+      
+      setTimeout(() => {
+        clearInterval(initialHideAttempt);
+      }, 10000);
     }
-  }, 1000);
-  
-  setTimeout(() => {
-    clearInterval(initialHideAttempt);
-  }, 10000);
+  }
 }
 
 let previousUrl = location.href;
@@ -141,7 +222,11 @@ const urlObserver = new MutationObserver(() => {
     
     urlChangeTimeout = setTimeout(() => {
       if (location.href.includes('youtube.com/watch')) {
-        hideComments();
+        commentsHidden = false;
+        foundCommentsSection = null;
+        foundCommentsSelector = null;
+        currentChannelId = null;
+        detectChannelAndProcessComments();
       }
     }, 1000);
   }
@@ -184,4 +269,4 @@ function showNotification(message) {
   }, 3000);
 }
 
-showNotification('Comments hidden by Spoiler Blocker! Click the button to show them.');
+initializePage();

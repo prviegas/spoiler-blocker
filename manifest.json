@@ -2,15 +2,23 @@
   "name": "Spoiler Blocker",
   "description": "A Chrome extension that hides comments on YouTube videos to prevent spoilers, with an option to show them when desired",
   "version": "1.2",
-  "permissions": ["activeTab"],
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
   "content_scripts": [
     {
       "matches": ["*://www.youtube.com/*"],
       "js": ["content.js"]
     }
-  ],  "icons": {
+  ],
+  "icons": {
     "16": "images/icon16.png",
     "48": "images/icon48.png",
     "128": "images/icon128.png"
-  }
+  },
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
+  "options_page": "options/options.html"
 }

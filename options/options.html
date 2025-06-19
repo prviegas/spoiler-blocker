@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Spoiler Blocker Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Spoiler Blocker Settings</h1>
+    
+    <div class="section">
+      <h2>Spoiler Channel Management</h2>
+      <p>Add YouTube channels where you want comments to be hidden automatically.</p>
+      
+      <div class="channel-input">
+        <input type="text" id="channelInput" placeholder="Paste YouTube channel URL or ID">
+        <button id="addChannel">Add Channel</button>
+      </div>
+      
+      <div class="channel-list-container">
+        <h3>Current Spoiler Channels:</h3>
+        <ul id="channelList" class="channel-list">
+          <!-- Channel list will be populated here -->
+        </ul>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2>Options</h2>
+      <label class="option">
+        <input type="checkbox" id="onlySpoilerChannels" checked>
+        Only hide comments on spoiler channels
+      </label>
+    </div>
+    
+    <div class="save-container">
+      <div id="status"></div>
+      <button id="save">Save Settings</button>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
