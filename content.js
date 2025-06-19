@@ -98,16 +98,39 @@ function createShowCommentsButton(commentsSection) {
     showCommentsButton.style.backgroundColor = '#065fd4';
   });
   
-  // Add click event to show comments
+  // Add click event to show comments - FIXED VERSION
   showCommentsButton.addEventListener('click', () => {
+    console.log('Show comments button clicked');
+    
     // Show the comments section
     if (foundCommentsSection) {
-      foundCommentsSection.style.display = '';
+      // Make sure to set display to block or '' to show it
+      foundCommentsSection.style.display = 'block';
       
-      // Remove the button container
-      buttonContainer.parentNode.removeChild(buttonContainer);
+      // Remove the button container after showing comments
+      if (buttonContainer.parentNode) {
+        buttonContainer.parentNode.removeChild(buttonContainer);
+      }
       
       console.log('Comments shown by user action');
+      showNotification('Comments are now visible');
+    } else {
+      console.error('Unable to find comments section to show');
+      
+      // Try to re-find the comments section using the stored selector
+      if (foundCommentsSelector) {
+        const commentsSection = document.querySelector(foundCommentsSelector);
+        if (commentsSection) {
+          commentsSection.style.display = 'block';
+          if (buttonContainer.parentNode) {
+            buttonContainer.parentNode.removeChild(buttonContainer);
+          }
+          console.log('Comments found and shown by selector');
+          showNotification('Comments are now visible');
+        } else {
+          showNotification('Error: Could not find comments to show');
+        }
+      }
     }
   });
   
