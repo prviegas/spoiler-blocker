@@ -6,8 +6,6 @@
 
 A Chrome extension that hides comments on YouTube videos to prevent spoilers, with an option to show them when desired.
 
-<img src="images/icon128.png" alt="Spoiler Blocker Logo" width="128" height="128">
-
 ## Features
 
 - 🚫 Automatically hides the comments section on YouTube videos
