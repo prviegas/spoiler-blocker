@@ -20,6 +20,9 @@ function loadSettings() {
     
     if (location.href.includes('youtube.com/watch')) {
       detectChannelAndProcessComments();
+    } else if (location.href.includes('youtube.com')) {
+      // Process thumbnails on YouTube homepage, search results, etc.
+      processThumbnails();
     }
   });
 }
@@ -179,6 +182,102 @@ function createShowCommentsButton(commentsSection) {
   commentsSection.parentNode.insertBefore(buttonContainer, commentsSection);
 }
 
+// New function to extract channel ID from thumbnail element
+function getChannelIdFromThumbnail(thumbnailElement) {
+  // Try to find channel link near the thumbnail
+  let channelElement = null;
+  
+  // Navigate up to find the video container
+  let container = thumbnailElement.closest('ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer');
+  if (container) {
+    // Look for channel name element which typically has a link
+    channelElement = container.querySelector('#channel-name a, #text-container a, .ytd-channel-name a');
+  }
+  
+  if (channelElement && channelElement.href) {
+    const match = channelElement.href.match(/youtube\.com\/(channel|c|user|@)(\/|%2F)?([\w-]+)/i);
+    if (match && match[3]) {
+      return match[3];
+    }
+  }
+  
+  return null;
+}
+
+// New function to blur thumbnails from spoiler channels
+function blurThumbnail(thumbnailElement, channelId) {
+  // Skip if already processed
+  if (thumbnailElement.hasAttribute('data-spoiler-processed')) {
+    return;
+  }
+  
+  // Mark as processed to avoid duplicate processing
+  thumbnailElement.setAttribute('data-spoiler-processed', 'true');
+  
+  // Create overlay container
+  const overlayContainer = document.createElement('div');
+  overlayContainer.className = 'spoiler-blocker-overlay';
+  overlayContainer.style.position = 'absolute';
+  overlayContainer.style.top = '0';
+  overlayContainer.style.left = '0';
+  overlayContainer.style.width = '100%';
+  overlayContainer.style.height = '100%';
+  overlayContainer.style.display = 'flex';
+  overlayContainer.style.justifyContent = 'center';
+  overlayContainer.style.alignItems = 'center';
+  overlayContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  overlayContainer.style.backdropFilter = 'blur(10px)';
+  overlayContainer.style.zIndex = '10';
+  overlayContainer.style.cursor = 'pointer';
+  overlayContainer.style.transition = 'opacity 0.2s';
+  
+  // Create SPOILER text
+  const spoilerText = document.createElement('div');
+  spoilerText.textContent = 'SPOILER';
+  spoilerText.style.color = 'white';
+  spoilerText.style.fontSize = '18px';
+  spoilerText.style.fontWeight = 'bold';
+  spoilerText.style.textShadow = '0 0 5px rgba(0, 0, 0, 0.8)';
+  spoilerText.style.padding = '10px';
+  
+  // Unblur on click
+  overlayContainer.addEventListener('click', (e) => {
+    e.stopPropagation();
+    overlayContainer.style.opacity = '0';
+    setTimeout(() => {
+      if (overlayContainer.parentNode) {
+        overlayContainer.parentNode.removeChild(overlayContainer);
+      }
+    }, 200);
+  });
+
+  overlayContainer.appendChild(spoilerText);
+  
+  // Make sure the thumbnail container has position relative
+  const thumbnailContainer = thumbnailElement.closest('#thumbnail, .ytd-thumbnail');
+  if (thumbnailContainer) {
+    const currentPosition = window.getComputedStyle(thumbnailContainer).position;
+    if (currentPosition === 'static') {
+      thumbnailContainer.style.position = 'relative';
+    }
+    thumbnailContainer.appendChild(overlayContainer);
+  }
+}
+
+// Process thumbnails on the page
+function processThumbnails() {
+  // Selectors that typically contain thumbnails
+  const thumbnailContainers = document.querySelectorAll('ytd-thumbnail:not([hidden])');
+  
+  thumbnailContainers.forEach(thumbnail => {
+    const channelId = getChannelIdFromThumbnail(thumbnail);
+    
+    if (channelId && settings.spoilerChannels.some(ch => ch.id === channelId)) {
+      blurThumbnail(thumbnail, channelId);
+    }
+  });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getStatus') {
     sendResponse({
@@ -207,6 +306,37 @@ function initializePage() {
         clearInterval(initialHideAttempt);
       }, 10000);
     }
+  } else if (location.href.includes('youtube.com')) {
+    processThumbnails();
+    
+    // Set up a mutation observer to handle dynamically loaded thumbnails
+    setupThumbnailObserver();
+  }
+}
+
+// Setup a mutation observer for dynamically loaded thumbnails
+function setupThumbnailObserver() {
+  const thumbnailObserver = new MutationObserver((mutations) => {
+    let shouldProcessThumbnails = false;
+    
+    mutations.forEach(mutation => {
+      if (mutation.addedNodes.length > 0) {
+        shouldProcessThumbnails = true;
+      }
+    });
+    
+    if (shouldProcessThumbnails) {
+      processThumbnails();
+    }
+  });
+  
+  // Target the main content area where new thumbnails would be loaded
+  const contentArea = document.querySelector('#content, #page-manager');
+  if (contentArea) {
+    thumbnailObserver.observe(contentArea, { 
+      childList: true, 
+      subtree: true 
+    });
   }
 }
 
@@ -227,6 +357,8 @@ const urlObserver = new MutationObserver(() => {
         foundCommentsSelector = null;
         currentChannelId = null;
         detectChannelAndProcessComments();
+      } else if (location.href.includes('youtube.com')) {
+        processThumbnails();
       }
     }, 1000);
   }
